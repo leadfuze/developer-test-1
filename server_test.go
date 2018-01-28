@@ -1,4 +1,4 @@
-package developertest
+package main
 
 import (
 	"errors"

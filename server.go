@@ -1,4 +1,4 @@
-package developertest
+package main
 
 import (
 	"encoding/json"
@@ -79,6 +79,10 @@ func (s *Server) Get(c echo.Context) error {
 	} else {
 		return c.JSONBlob(http.StatusOK, js)
 	}
+}
+
+func (s *Server) Run(port int) {
+	s.Echo.Logger.Fatal(s.Echo.Start(fmt.Sprintf(":%v", port)))
 }
 
 func (s *Server) createBadResponseMsg(ec echo.Context, responseCode int, message string) error {
