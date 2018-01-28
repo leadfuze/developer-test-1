@@ -1,8 +1,41 @@
-package developertest
+package main
 
 import (
+	"errors"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/labstack/echo"
+	"github.com/yogihardi/developer-test-1/externalservice"
 )
+
+var (
+	server           *Server
+	e                *echo.Echo
+	postRequestCount = 0
+	getRequestCount  = 0
+	getId            = 0
+)
+
+type MockClient struct{}
+
+func (mockClient *MockClient) GET(id int) (*externalservice.Post, error) {
+	getRequestCount += 1
+	getId = id
+	return nil, errors.New("error")
+}
+
+func (mockClient *MockClient) POST(id int, post *externalservice.Post) (*externalservice.Post, error) {
+	postRequestCount += 1
+	post.ID = id
+	return post, nil
+}
+
+func init() {
+	e = echo.New()
+	server = NewServer(e, &MockClient{})
+}
 
 func TestPOSTCallsAndReturnsJSONfromExternalServicePOST(t *testing.T) {
 	// Descirption
@@ -34,6 +67,38 @@ func TestPOSTCallsAndReturnsJSONfromExternalServicePOST(t *testing.T) {
 	// Assert that the externalservice.Client#POST was called 1 times with the
 	// provided `:id` and post body and that the returned Post (from
 	// externalservice.Client#POST) is written out as `application/json`.
+
+	req := httptest.NewRequest(echo.POST, "/api/posts/87", nil)
+	req.Header.Add("Content-type", "application/x-www-form-urlencoded")
+
+	if err := req.ParseForm(); err != nil {
+		panic(err.Error())
+	}
+
+	req.Form.Add("title", "Hello World!")
+	req.Form.Add("description", "Lorem Ipsum Dolor Sit Amen.")
+
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("87")
+
+	// execute get post method
+	server.Post(c)
+
+	if rec.Code != http.StatusOK {
+		t.Fail()
+	}
+
+	expectedBody := `{"id":87,"title":"Hello World!","description":"Lorem Ipsum Dolor Sit Amen."}`
+	if rec.Body.String() != expectedBody {
+		t.Fail()
+	}
+
+	if postRequestCount != 1 {
+		t.Fail()
+	}
+
 }
 
 func TestPOSTCallsAndReturnsErrorAsJSONFromExternalServiceGET(t *testing.T) {
@@ -76,4 +141,29 @@ func TestPOSTCallsAndReturnsErrorAsJSONFromExternalServiceGET(t *testing.T) {
 	//	}
 	//
 	// Note: *`:id` should be the actual `:id` in the original request.*
+
+	req := httptest.NewRequest(echo.GET, "/api/posts/87", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("87")
+
+	server.Get(c)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fail()
+	}
+
+	expectedBody := `{"code":400, "message": "Bad Request", "path":"/api/posts/87"}`
+	if rec.Body.String() != expectedBody {
+		t.Fail()
+	}
+
+	if getRequestCount != 1 {
+		t.Fail()
+	}
+
+	if getId != 87 {
+		t.Fail()
+	}
 }
